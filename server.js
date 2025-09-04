@@ -1,14 +1,15 @@
+// server.js
+require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-require('dotenv').config();
+const cron = require('node-cron');
 
 const testEmailRoute = require('./routes/testEmail');
 const weatherRoute = require('./routes/weatherRoute');
 const authRoutes = require('./routes/authRoutes');
 const eventRoutes = require('./routes/eventRoutes');
-const { runReminders } = require('./reminderScheduler'); // make sure you export this
-const cron = require('node-cron');
+const { runReminders } = require('./reminderScheduler'); // ✅ fixed import
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,20 +22,28 @@ app.use(express.json());
 app.use('/api/weather', weatherRoute);
 app.use('/api/auth', authRoutes);
 app.use('/api/events', eventRoutes);
-app.use('/api', testEmailRoute); // to test email functionality
+app.use('/api', testEmailRoute);
 
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => {
-    app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
-    console.log('✅ MongoDB connected');
+// DB Connection
+if (!process.env.MONGO_URI) {
+  console.error('❌ MONGO_URI is not set in .env');
+  process.exit(1);
+}
+
+mongoose
+  .connect(process.env.MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
   })
-  .catch(err => console.error('❌ DB connection error:', err));
+  .then(() => {
+    console.log('✅ MongoDB connected');
+    app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+  })
+  .catch((err) => console.error('❌ DB connection error:', err));
 
-// Cron job (runs every minute)
+// Cron job → runs every minute
 cron.schedule('* * * * *', () => {
-  runReminders();
+  runReminders().catch((err) =>
+    console.error('❌ runReminders error:', err)
+  );
 });
